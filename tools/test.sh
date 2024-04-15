@@ -30,11 +30,9 @@ echo "---t4"
 # x86_64-unknown-linux-gnu and powerpc-unknown-linux-gnu for GitHub Actions
 if [ -e ../target/x86_64-unknown-linux-gnu/debug/examples/ausnd-aureader-toisto ]
 then
-    echo "TARGET: x86_64-unknown-linux-gnu"
     python3 toisto-runner.py -c -v --override-list ../toisto-ausnd-override-list.json ../target/x86_64-unknown-linux-gnu/debug/examples/ausnd-aureader-toisto
 elif [ -e ../target/powerpc-unknown-linux-gnu/debug/examples/ausnd-aureader-toisto ]
 then
-    echo "TARGET: powerpc-unknown-linux-gnu"
     python3 toisto-runner.py -c -v --override-list ../toisto-ausnd-override-list.json ../target/powerpc-unknown-linux-gnu/debug/examples/ausnd-aureader-toisto
 else
     python3 toisto-runner.py -c --override-list ../toisto-ausnd-override-list.json ../target/debug/examples/ausnd-aureader-toisto

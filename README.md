@@ -51,7 +51,8 @@ See [the ausnd API documentation](https://docs.rs/ausnd/) for details.
 A simple AU player using `ausnd::AuReader` and [tinyaudio](https://crates.io/crates/tinyaudio):
 
 ```sh
-cargo run --example ausnd-tinyaudio filename.au
+cd examples/ausnd-tinyaudio
+cargo run filename.au
 ```
 
 A simple audio processor for volume and noise effects using `AuStreamParser` and `AuWriter`:

@@ -4,7 +4,8 @@ Example to play AU audio files using ausnd and tinyaudio.
 
 Example run:
 
-    cargo run --example ausnd-tinyaudio filename.au
+    cd examples/ausnd-tinyaudio
+    cargo run filename.au
 
 */
 use std::env;
