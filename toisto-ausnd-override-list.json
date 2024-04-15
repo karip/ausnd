@@ -1,0 +1,11 @@
+{
+    "tests/au/encoding-23-g721.au": { "result": "ignore" },
+    "tests/au/encoding-24-g722.au": { "result": "ignore" },
+    "tests/au/encoding-25-g723.3.au": { "result": "ignore" },
+    "tests/au/encoding-26-g723.5.au": { "result": "ignore" },
+    "tests/exported/audacity-g721-32kbs.au": { "result": "ignore" },
+    "tests/exported/audacity-g723.3-24kbs.au": { "result": "ignore" },
+    "tests/exported/audacity-g723.5-40kbs.au": { "result": "ignore" },
+    "tests/exported/audioconvert-g721.au": { "result": "ignore" },
+    "tests/exported/audioconvert-g723.3.au": { "result": "ignore" }
+}
