@@ -44,7 +44,7 @@ writer.write_samples_i16(&[ 1, 2, 3, 4 ]).expect("Write sample error");
 writer.finalize().expect("Finalize error");
 ```
 
-See [the ausnd API documentation](https://crates.io/crates/ausnd) for details.
+See [the ausnd API documentation](https://docs.rs/ausnd/) for details.
 
 ## Examples
 
