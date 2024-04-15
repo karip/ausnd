@@ -75,7 +75,6 @@ needs to be fetched before running the integration tests.
 ```sh
 cd ausnd
 git submodule update --init
-#git clone https://github.com/karip/toisto-au-test-suite.git
 ./tools/test.sh
 ```
 

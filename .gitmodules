@@ -1,0 +1,3 @@
+[submodule "toisto-au-test-suite"]
+	path = toisto-au-test-suite
+	url = https://github.com/karip/toisto-au-test-suite
