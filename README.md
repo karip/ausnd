@@ -78,11 +78,13 @@ git submodule update --init
 ./tools/test.sh
 ```
 
+The test should end with `--- All tests OK.`.
+
 ## References
 
  - [Wikipedia: Au file format](https://en.wikipedia.org/wiki/Au_file_format)
  - [Oracle AU audio file format man page](https://docs.oracle.com/cd/E36784_01/html/E36882/au-4.html)
- - [Audio File Formats FAQ: File Formats](https://web.archive.org/web/20230223152815/https://sox.sourceforge.net/AudioFormats-11.html#ss11.2)
+ - [Audio File Formats FAQ: File Formats (archived)](https://web.archive.org/web/20230223152815/https://sox.sourceforge.net/AudioFormats-11.html#ss11.2)
  - [NeXT/Sun soundfile format](http://soundfile.sapp.org/doc/NextFormat/)
  - [NeXT soundstruct.h](https://github.com/johnsonjh/NeXTDSP/blob/26d2b31a6fb4bc16d55ebe17824cd2d6f9edfc7b/sound-33/soundstruct.h#L4)
  - [SunOS audio_filehdr.h](https://github.com/Arquivotheca/SunOS-4.1.3/blob/413/demo/SOUND/multimedia/audio_filehdr.h)
