@@ -33,7 +33,7 @@ pub fn jsonify<T>(reader: &mut ausnd::AuReader<T>) -> ausnd::AuResult<String>
     json += &format!("    \"desc\": {},\n", bytes_to_json_number_array(&desc));
 
     let mut samples = vec![];
-    let sample_error = read_samples(reader, &mut samples);
+    let mut sample_error = read_samples(reader, &mut samples);
 
     let mut sample_frames = 0;
     if info.channels > 0 {
@@ -49,20 +49,31 @@ pub fn jsonify<T>(reader: &mut ausnd::AuReader<T>) -> ausnd::AuResult<String>
 
     //println!("{:?}", info);
 
+    // ensure 300 samples for each channel can be read
+    let channels = match usize::try_from(info.channels) {
+        Ok(ch) => ch,
+        Err(_) =>  {
+            sample_error = Err(AuError::InvalidReadState);
+            0
+        }
+    };
+    if sample_error.is_ok() && channels.checked_mul(300).is_none() {
+        sample_error = Err(AuError::InvalidReadState);
+    }
     match sample_error {
         Ok(()) => {
             // print sample data
             json += &format!(",\n    \"startSamples\": [\n");
-            let start_einx = samples.len().min(300*info.channels as usize);
-            print_sample_data(info.channels as usize, &samples[0..start_einx], &mut json);
+            let start_einx = samples.len().min(300*channels);
+            print_sample_data(channels, &samples[0..start_einx], &mut json);
             json += &format!("    ],\n");
 
             json += &format!("    \"endSamples\": [\n");
             let mut end_sinx = 0;
-            if samples.len() > 30*info.channels as usize {
-                end_sinx = samples.len() - 30*info.channels as usize;
+            if samples.len() > 30*channels {
+                end_sinx = samples.len() - 30*channels;
             }
-            print_sample_data(info.channels as usize, &samples[end_sinx..], &mut json);
+            print_sample_data(channels, &samples[end_sinx..], &mut json);
             json += &format!("    ]\n");
         },
         Err(AuError::Unsupported) => {

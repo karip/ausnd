@@ -251,57 +251,63 @@ fn write_au(json: &AuJson, src_start_samples: &Vec<Vec<f64>>, src_end_samples: &
     let mut buf = vec![];
     let mut cursor = Cursor::new(&mut buf);
     let mut auwriter = ausnd::AuWriter::new(&mut cursor, &winfo)?;
+    let Ok(channels) = usize::try_from(json.channels) else {
+        return Err(AuError::from(Error::new(ErrorKind::Other, "Too many channels")));
+    };
+    if json.samples_per_channel.checked_mul(channels).is_none() {
+        return Err(AuError::from(Error::new(ErrorKind::Other, "Too many channels")));
+    }
     match sample_format {
         SampleFormat::I8 => {
             let samples = create_samples::<i8>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as i8 });
             auwriter.write_samples_i8(&samples)?;
         },
         SampleFormat::I16 => {
             let samples = create_samples::<i16>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as i16 });
             auwriter.write_samples_i16(&samples)?;
         },
         SampleFormat::I24 => {
             let samples = create_samples::<i32>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as i32 });
             auwriter.write_samples_i24(&samples)?;
         },
         SampleFormat::I32 => {
             let samples = create_samples::<i32>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as i32 });
             auwriter.write_samples_i32(&samples)?;
         },
         SampleFormat::F32 => {
             let samples = create_samples::<f32>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as f32 });
             auwriter.write_samples_f32(&samples)?;
         },
         SampleFormat::F64 => {
             let samples = create_samples::<f64>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as f64 });
             auwriter.write_samples_f64(&samples)?;
         },
         SampleFormat::CompressedUlaw => {
             let samples = create_samples::<i16>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as i16 });
             auwriter.write_samples_i16(&samples)?;
         },
         SampleFormat::CompressedAlaw => {
             let samples = create_samples::<i16>(json.samples_per_channel,
-                json.channels as usize, src_start_samples, src_end_samples,
+                channels, src_start_samples, src_end_samples,
                 |x| { x as i16 });
             auwriter.write_samples_i16(&samples)?;
         },
         SampleFormat::Custom(_) => {
-            let samples = vec![0u8; json.samples_per_channel * json.channels as usize];
+            let samples = vec![0u8; json.samples_per_channel * channels];
             auwriter.write_samples_raw(&samples)?;
         },
     }
