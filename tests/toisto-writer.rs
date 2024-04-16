@@ -50,8 +50,8 @@ struct AuJson {
     codec: String,
     sample_size: u32,
     samples_per_channel: usize,
-    start_samples: Vec<Vec<serde_json::Value>>,
-    end_samples: Vec<Vec<serde_json::Value>>,
+    start_samples: Option<Vec<Vec<serde_json::Value>>>,
+    end_samples: Option<Vec<Vec<serde_json::Value>>>,
     //desc: Option<Vec<u8>>, // desc isn't checked because padding bytes wouldn't match
 }
 
@@ -97,7 +97,9 @@ fn run_test_for_files(json_filenames: &[String], verbose: bool, no_errors: bool)
     println!("Total write tests {}: {count_ok} passed, \
               {count_fail} failed, {count_ignore} ignored.",
         count_ok + count_fail + count_ignore);
-    assert_eq!(count_fail, 0, "'left' number of tests failed:");
+    if count_fail > 0 {
+        panic!("{} tests failed!", count_fail);
+    }
 }
 
 fn test(json_filename: &str) -> ausnd::AuResult<()> {
@@ -192,14 +194,16 @@ fn parse_json(spectxt: &str, filename: &str) -> AuJson {
     match serde_json::from_str(spectxt) {
         Ok(d) => d,
         Err(e) => {
-            eprintln!(" * ERROR: invalid json file: {}: {}", filename, e);
-            std::process::exit(2);
+            panic!("ERROR: invalid json file: {}: {}", filename, e);
         }
     }
 }
 
-fn convert_json_samples_to_f64(samples: &Vec<Vec<serde_json::Value>>) -> Vec<Vec<f64>> {
+fn convert_json_samples_to_f64(samples: &Option<Vec<Vec<serde_json::Value>>>) -> Vec<Vec<f64>> {
     let mut result = vec![];
+    let Some(samples) = samples else {
+        return result;
+    };
     for ch in samples {
         let mut out = vec![];
         for s in ch {
@@ -216,10 +220,10 @@ fn serde_value_to_f64(val: &serde_json::Value) -> f64 {
             if s == "nan" { f64::NAN }
             else if s == "inf" { f64::INFINITY }
             else if s == "-inf" { -f64::INFINITY }
-            else { eprintln!(" * ERROR: invalid value: {}", s); std::process::exit(2); }
+            else { panic!("ERROR: invalid value: {}", s); }
         },
         serde_json::Value::Number(n) => { n.as_f64().unwrap_or(0.0) },
-        _ => { eprintln!(" * ERROR: invalid value: {:?}", val); std::process::exit(2); }
+        _ => { panic!("ERROR: invalid value: {:?}", val); }
     }
 }
 
