@@ -9,7 +9,7 @@ cargo doc
 cargo test --doc
 
 # run all tests - no capture if running under GitHub Actions
-if [ $GITHUB_ACTIONS = "true" ]; then
+if [ "$GITHUB_ACTIONS" == "true" ]; then
     cargo test --tests -- --nocapture
 else
     cargo test --tests
