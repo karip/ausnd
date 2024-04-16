@@ -18,6 +18,7 @@ fn toisto_writer() {
     let mut json_filenames = Vec::new();
     glob_json_files("toisto-au-test-suite/tests", &mut json_filenames)
         .expect("Can't get json filenames");
+    json_filenames.sort();
     run_test_for_files(&json_filenames, true, false);
 }
 
@@ -53,6 +54,7 @@ struct AuJson {
     start_samples: Option<Vec<Vec<serde_json::Value>>>,
     end_samples: Option<Vec<Vec<serde_json::Value>>>,
     //desc: Option<Vec<u8>>, // desc isn't checked because padding bytes wouldn't match
+    result: Option<String>,
 }
 
 impl AuJson {
@@ -75,17 +77,26 @@ fn run_test_for_files(json_filenames: &[String], verbose: bool, no_errors: bool)
             }
             continue;
         }
-        match test(&json_filename) {
+        let src_json = parse_json_file(&json_filename);
+        if src_json.result == Some("ignore".to_string()) ||
+            src_json.result == Some("invalid".to_string()) {
+            count_ignore += 1;
+            if verbose {
+                println!("IGNORE: {}", json_filename);
+            }
+            continue;
+        }
+        match test(&src_json) {
             Ok(()) => {
                 count_ok += 1;
                 if verbose {
-                    println!("OK  : {}", json_filename);
+                    println!("OK    : {}", json_filename);
                 }
             },
             Err(e) => {
                 count_fail += 1;
                 if !no_errors {
-                    println!("FAIL: {}", json_filename);
+                    println!("FAIL  : {}", json_filename);
                     eprintln!(" * ERROR: {:?}", e);
                 } else {
                     println!("(FAIL): {}", json_filename);
@@ -102,8 +113,7 @@ fn run_test_for_files(json_filenames: &[String], verbose: bool, no_errors: bool)
     }
 }
 
-fn test(json_filename: &str) -> ausnd::AuResult<()> {
-    let src_json = parse_json_file(&json_filename);
+fn test(src_json: &AuJson) -> ausnd::AuResult<()> {
     let src_start_samples = convert_json_samples_to_f64(&src_json.start_samples);
     let src_end_samples = convert_json_samples_to_f64(&src_json.end_samples);
 
