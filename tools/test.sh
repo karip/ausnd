@@ -1,7 +1,7 @@
 
 set -e # stop on errors
 
-if [ ! -d toisto-au-test-suite ]; then
+if [ ! -d "toisto-au-test-suite/tests" ]; then
     echo "toisto-au-test-suite is missing. Read README.md Testing section for instructions."
     exit 1
 fi
