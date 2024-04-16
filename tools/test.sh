@@ -4,15 +4,12 @@ set -e # stop on errors
 # ensure clippy gives no errors or warnings
 cargo clippy -- -D warnings
 
-# ensure documentation can be built
+# ensure documentation can be built and test code examples
 cargo doc
-
-echo "---t1"
-ls -laR target
-echo "---t2 runner os: $RUNNER_OS actions: $GITHUB_ACTIONS"
+cargo test --doc
 
 # run all tests - no capture if running under GitHub Actions
-if [ $GITHUB_ACTIONS == "true" ]; then
+if [ $GITHUB_ACTIONS = "true" ]; then
     cargo test --tests -- --nocapture
 else
     cargo test --tests
@@ -25,10 +22,6 @@ cargo build --example ausnd-aureader-toisto
 echo
 echo 'Toisto AU test suite results:'
 cd toisto-au-test-suite
-
-echo "---t3"
-ls -laR ../target
-echo "---t4"
 
 # target/debug for normal testing,
 # x86_64-unknown-linux-gnu and powerpc-unknown-linux-gnu for GitHub Actions
