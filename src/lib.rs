@@ -48,7 +48,8 @@
     clippy::checked_conversions,
 )]
 
-// stupid way to test rust code blocks in README.md
+// silly way to test rust code blocks in README.md
+// https://doc.rust-lang.org/rustdoc/write-documentation/documentation-tests.html
 #[doc = include_str!("../README.md")]
 #[cfg(doctest)]
 pub struct ReadmeDoctests;

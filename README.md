@@ -1,5 +1,7 @@
 # Ausnd
 
+[![Cross-platform tests](https://github.com/karip/ausnd/actions/workflows/cross-test.yml/badge.svg)](https://github.com/karip/ausnd/actions/workflows/cross-test.yml)
+
 Rust library to read and write
 Sun/Next [AU audio format](https://en.wikipedia.org/wiki/Au_file_format).
 Features:
@@ -80,6 +82,15 @@ git submodule update --init
 ```
 
 The test should end with `--- All tests OK.`.
+
+Performance testing:
+
+```sh
+cargo bench
+```
+
+There is a GitHub Action called "Cross-platform tests" (cross-test.yml), which automatically
+runs `./tools/test.sh` for little-endian 64-bit x64_86 and big-endian 32-bit PowerPC.
 
 ## References
 
