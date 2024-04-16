@@ -816,7 +816,8 @@ mod tests {
     #[test]
     fn test_read_info() -> AuResult<()> {
         for data_size in [16, 0xffffffff] {
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I16, 44100, 1, &[ 0, 0, 0, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I16, 44100, 1, &[ 0, 0, 0, 0 ]);
             au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -840,7 +841,8 @@ mod tests {
     #[test]
     fn test_read_info_for_unsupported_encoding() -> AuResult<()> {
         for data_size in [16, 0xffffffff] {
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::Custom(0x402), 44100, 1, &[ 0, 0, 0, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::Custom(0x402), 44100, 1, &[ 0, 0, 0, 0 ]);
             au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -865,8 +867,8 @@ mod tests {
     fn test_read_description() -> AuResult<()> {
         for data_size in [8, 0xffffffff] {
             // desc empty
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
-                &[]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -886,8 +888,8 @@ mod tests {
             assert!(reader.read_description(&mut []).is_err());
 
             // desc "WORLD"
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
-                &[ b'W', b'O', b'R', b'L', b'D', 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ b'W', b'O', b'R', b'L', b'D', 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -913,8 +915,8 @@ mod tests {
             assert!(reader.read_description(&mut desc).is_err());
 
             // desc four zeros
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
-                &[ 0, 0, 0, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 0, 0, 0, 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -927,8 +929,8 @@ mod tests {
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
 
             // desc single byte: 99
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
-                &[ 99 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 99 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -940,8 +942,8 @@ mod tests {
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
 
             // desc 8 bytes
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
-                &[ 65, 66, 67, 68, 69, 70, 71, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 65, 66, 67, 68, 69, 70, 71, 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -957,14 +959,16 @@ mod tests {
     #[test]
     fn test_seek_to_start_of_samples() -> AuResult<()> {
         // failing call
-        let mut au = create_au_hdr(0, 8, SampleFormat::Custom(0x402), 44100, 1);
+        let mut au = create_au_hdr(0, 8,
+            SampleFormat::Custom(0x402), 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
         assert!(reader.seek_to_start_of_samples().is_err());
 
         // failing call after reading a sample
-        let mut au = create_au_hdr(0, 8, SampleFormat::I8, 44100, 1);
+        let mut au = create_au_hdr(0, 8,
+            SampleFormat::I8, 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
@@ -973,7 +977,8 @@ mod tests {
         assert!(reader.seek_to_start_of_samples().is_err());
 
         // failing call after seek
-        let mut au = create_au_hdr(0, 8, SampleFormat::I8, 44100, 1);
+        let mut au = create_au_hdr(0, 8,
+            SampleFormat::I8, 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
@@ -982,7 +987,8 @@ mod tests {
         assert!(reader.seek_to_start_of_samples().is_err());
 
         // successful call
-        let mut au = create_au_hdr_with_desc(3, 8, SampleFormat::Custom(0x402), 44100, 1, &[ 65, 65, 65, 0 ]);
+        let mut au = create_au_hdr_with_desc(3, 8,
+            SampleFormat::Custom(0x402), 44100, 1, &[ 65, 65, 65, 0 ]);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18, 98, 99 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
@@ -1003,7 +1009,8 @@ mod tests {
     fn test_read_samples_skips_description() -> AuResult<()> {
         for data_size in [32, 0xffffffff] {
             // description is skipped when reading samples
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1,
                     &[ b'H', b'E', b'L', b'L', b'O', 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
@@ -1018,7 +1025,8 @@ mod tests {
             assert!(reader.read_description(&mut desc).is_err());
 
             // partially read description is skipped when reading samples
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1,
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1,
                 &[ b'H', b'E', b'L', b'L', b'O', 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
@@ -1041,7 +1049,8 @@ mod tests {
     #[test]
     fn test_read_sample() -> AuResult<()> {
         for data_size in [32, 0xffffffff] {
-            let mut au = create_au_hdr(3, data_size, SampleFormat::I32, 44100, 1);
+            let mut au = create_au_hdr(3, data_size,
+                SampleFormat::I32, 44100, 1);
             au.extend_from_slice(&[ 0, 0, 0, 1, 0, 0, 0, 2, 0, 0, 0, 3, 0, 0, 0, 4,
                                     0, 0, 0, 5, 0, 0, 0, 6, 0, 0, 0, 7, 0, 0, 0, 8 ]);
             let mut cursor = Cursor::new(&au);
@@ -1065,7 +1074,8 @@ mod tests {
     #[test]
     fn test_read_samples_appending_new_data() -> AuResult<()> {
         let mut buffer = AppendableReader::new();
-        let au = create_au_hdr(3, 0xffffffff, SampleFormat::I32, 44100, 1);
+        let au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::I32, 44100, 1);
         buffer.append(&au);
         buffer.append(&[ 0, 0, 0, 1 ]);
         let mut init_buf = vec![0u8; 3];
@@ -1078,7 +1088,8 @@ mod tests {
         assert!(reader.samples()?.next().is_none());
 
         let mut buffer = AppendableReader::new();
-        let au = create_au_hdr(3, 0xffffffff, SampleFormat::I32, 44100, 1);
+        let au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::I32, 44100, 1);
         buffer.append(&au);
         // one sample and a half broken sample
         buffer.append(&[ 0, 0, 0, 1, 0, 0 ]);
@@ -1097,7 +1108,8 @@ mod tests {
     #[test]
     fn test_read_sample_for_broken_last_sample_read_only() -> AuResult<()> {
         // non-broken sample - no error
-        let mut au = create_au_hdr_with_desc(3, 0xffffffff, SampleFormat::F32, 44100, 1, &[ 0, 0, 0, 0 ]);
+        let mut au = create_au_hdr_with_desc(3, 0xffffffff,
+            SampleFormat::F32, 44100, 1, &[ 0, 0, 0, 0 ]);
         au.extend_from_slice(&[ 0, 0, 0, 0, ]);
         let mut rd: &[u8] = au.as_ref();
         read_dummy_data(&mut rd, 3)?;
@@ -1137,7 +1149,8 @@ mod tests {
     fn test_read_samples_stream_cleared() -> AuResult<()> {
         // tests cases where the stream is suddenly cleared, creating errors
         let mut buffer = AppendableReader::new();
-        let au = create_au_hdr(3, 0xffffffff, SampleFormat::I32, 44100, 1);
+        let au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::I32, 44100, 1);
         buffer.append(&au);
         buffer.append(&[ 0, 0, 0, 1, 0, 0, 0, 2 ]);
         let mut init_buf = vec![0u8; 3];
@@ -1148,7 +1161,8 @@ mod tests {
         assert!(reader.read_info().is_err());
 
         let mut buffer = AppendableReader::new();
-        let au = create_au_hdr(3, 0xffffffff, SampleFormat::I32, 44100, 1);
+        let au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::I32, 44100, 1);
         buffer.append(&au);
         buffer.append(&[ 0, 0, 0, 1, 0, 0, 0, 2 ]);
         let mut init_buf = vec![0u8; 3];
@@ -1169,7 +1183,8 @@ mod tests {
     #[test]
     fn test_samples_iterator_and_size_hint() -> AuResult<()> {
         for data_size in [8, 0xffffffff] {
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1, &[ 0, 0, 0, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 0, 0, 0, 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
@@ -1214,7 +1229,8 @@ mod tests {
     #[test]
     fn test_samples_iterator_and_size_hint_for_read_only() -> AuResult<()> {
         for data_size in [8, 0xffffffff] {
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1, &[ 0, 0, 0, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 0, 0, 0, 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             let mut rd: &[u8] = au.as_ref();
             read_dummy_data(&mut rd, 3)?;
@@ -1241,7 +1257,8 @@ mod tests {
 
     #[test]
     fn test_resolved_sample_len_and_byte_len() -> AuResult<()> {
-        let mut au = create_au_hdr(3, 8, SampleFormat::I16, 44100, 1);
+        let mut au = create_au_hdr(3, 8,
+            SampleFormat::I16, 44100, 1);
         // audio data contains extra bytes, which should not be part of sample len
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85 ]);
         let mut cursor = Cursor::new(&au);
@@ -1252,7 +1269,8 @@ mod tests {
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 8);
 
         // test audio data size which isn't a multiple of the sample size
-        let mut au = create_au_hdr(3, 9, SampleFormat::I16, 44100, 1);
+        let mut au = create_au_hdr(3, 9,
+            SampleFormat::I16, 44100, 1);
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
@@ -1262,7 +1280,8 @@ mod tests {
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 9);
 
         // len is known even if the header has unknown size
-        let mut au = create_au_hdr(3, 0xffffffff, SampleFormat::I16, 44100, 1);
+        let mut au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::I16, 44100, 1);
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
@@ -1272,7 +1291,8 @@ mod tests {
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 16);
 
         // len is known even if the header has unknown size (not a multiple of the sample size)
-        let mut au = create_au_hdr(3, 0xffffffff, SampleFormat::I16, 44100, 1);
+        let mut au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::I16, 44100, 1);
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
@@ -1286,7 +1306,8 @@ mod tests {
 
     #[test]
     fn test_resolved_sample_len_and_byte_len_for_unsupported_encoding() -> AuResult<()> {
-        let mut au = create_au_hdr(3, 9, SampleFormat::Custom(0x402), 44100, 1);
+        let mut au = create_au_hdr(3, 9,
+            SampleFormat::Custom(0x402), 44100, 1);
         // audio data contains extra bytes, which should not be part of sample len
         au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8, 9, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85 ]);
         let mut cursor = Cursor::new(&au);
@@ -1297,7 +1318,8 @@ mod tests {
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 9);
 
         // len is known even if the header has unknown size
-        let mut au = create_au_hdr(3, 0xffffffff, SampleFormat::Custom(0x402), 44100, 1);
+        let mut au = create_au_hdr(3, 0xffffffff,
+            SampleFormat::Custom(0x402), 44100, 1);
         au.extend_from_slice(&[ 1, 2, 3, 4, 5 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
@@ -1313,7 +1335,8 @@ mod tests {
     fn test_seek() -> AuResult<()> {
         for data_size in [8, 0xffffffff] {
             // three dummy bytes at the start of the data to test that they don't affect seeking
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1, &[ 65, 65, 65, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 65, 65, 65, 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             if data_size != 0xffffffff {
                 // audio data contains extra bytes, which should not be part of sample data
@@ -1341,7 +1364,8 @@ mod tests {
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(5)));
 
             // check seek can be called before reading any samples
-            let mut au = create_au_hdr_with_desc(3, data_size, SampleFormat::I8, 44100, 1, &[ 65, 65, 65, 0 ]);
+            let mut au = create_au_hdr_with_desc(3, data_size,
+                SampleFormat::I8, 44100, 1, &[ 65, 65, 65, 0 ]);
             au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8 ]);
             if data_size != 0xffffffff {
                 // audio data contains extra bytes, which should not be part of sample data

@@ -105,7 +105,8 @@ fn pseudo_random(rng: &mut u32) -> f32 {
     *rng as f32 / 0x8000_0000u32 as f32 * 2.0 - 1.0
 }
 
-/// Simple conversion algorithm to convert Sample to f32 (integers are converted to [-1, 0.9921875]).
+/// Simple conversion algorithm to convert Sample to f32
+/// (integers are converted to [-1, 0.9921875]).
 fn simple_sample_to_f32(s: &ausnd::Sample) -> f32 {
     match s {
         ausnd::Sample::I8(s) => { *s as f32 / (1u32 << 7) as f32 },
