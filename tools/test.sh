@@ -1,18 +1,22 @@
 
 set -e # stop on errors
 
+if [ ! -d toisto-au-test-suite ]; then
+    echo "toisto-au-test-suite is missing. Read README.md Testing section for instructions."
+    exit 1
+fi
+
 # ensure clippy gives no errors or warnings
 cargo clippy -- -D warnings
 
-# ensure documentation can be built and test code examples
+# ensure documentation can be built
 cargo doc
-cargo test --doc
 
-# run all tests - no capture if running under GitHub Actions
+# run tests - no capture if running under GitHub Actions
 if [ "$GITHUB_ACTIONS" == "true" ]; then
-    cargo test --tests -- --nocapture
+    cargo test -- --nocapture
 else
-    cargo test --tests
+    cargo test
 fi
 
 # build the toisto tester

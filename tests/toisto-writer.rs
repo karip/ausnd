@@ -4,16 +4,24 @@
 
 use std::ffi::OsStr;
 use std::fs::File;
-use std::io::{Cursor, Error, ErrorKind, Read};
+use std::io::{Cursor, Error, ErrorKind, Read, Write};
 use std::path::Path;
 use ausnd::{SampleFormat, AuError};
 use serde::Deserialize;
 
 #[test]
 fn toisto_writer() {
-    // ensure that toisto-au-test-suite folder is found
-    assert!(Path::new("toisto-au-test-suite").try_exists()
-        .expect("Check for toisto-au-test-suite failed"));
+    // print a warning if the toisto-au-test-suite folder isn't found
+    match Path::new("toisto-au-test-suite/tests").try_exists() {
+        Ok(true) => {},
+        _ => {
+            // write directly to stderr() so that the warning is not captured by `cargo test`
+            std::io::stderr()
+                .write_all(b" * WARNING: Can't read folder 'toisto-au-test-suite/tests'\n")
+                .expect("Can't read folder 'toisto-au-test-suite/tests'");
+            std::process::exit(0);
+        }
+    }
 
     let mut json_filenames = Vec::new();
     glob_json_files("toisto-au-test-suite/tests", &mut json_filenames)
