@@ -192,7 +192,7 @@ pub struct AuReadInfo {
 
     /// Sample count. The value is `None` for unsupported encodings or
     /// if the header indicated that the stream has an unknown length.
-    pub sample_len: Option<u32>,
+    pub sample_len: Option<u64>,
 
     /// Length of the sample data in bytes.
     /// The value is `None` if the header indicates that the stream has an unknown length.
@@ -219,7 +219,7 @@ impl AuReadInfo {
                 None
             } else {
                 // division rounded down so that the possible last broken sample isn't included
-                Some(data_size / u32::from(sample_format.bytesize_u8()))
+                Some(u64::from(data_size) / sample_format.bytesize_u64())
             };
             (slen, Some(data_size))
         } else {
