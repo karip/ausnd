@@ -47,8 +47,6 @@ pub fn jsonify<T>(reader: &mut ausnd::AuReader<T>) -> ausnd::AuResult<String>
     }
     json += &format!("    \"samplesPerChannel\": {}", sample_frames);
 
-    //println!("{:?}", info);
-
     // ensure 300 samples for each channel can be read
     let channels = match usize::try_from(info.channels) {
         Ok(ch) => ch,
