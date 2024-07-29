@@ -16,7 +16,7 @@
 //! Provided functionality:
 //!
 //!  - [`AuReader`] reads the AU audio format, typically from a file.
-//!  - [`AuWriter`] writes the AU audio format, typically to a file.
+//!  - [`AuWriter`] writes the AU audio format, typically to a file or a stream.
 //!  - [`AuStreamParser`] parses the AU audio format and sends events to a callback.
 //!    Useful for reading infinite AU streams.
 //!
@@ -76,7 +76,7 @@ const UNKNOWN_DATA_SIZE: u32 = 0xffffffff;
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum SampleFormat {
     /// Compressed μ-Law sample format. Each decoded sample is a signed 16-bit integer.
-    /// Reading and writing should happen as signed 16-bit integers.
+    /// Reading and writing samples should happen as signed 16-bit integers.
     /// The AU audio format encoding value 1.
     CompressedUlaw,
     /// Signed 8-bit integer sample format. The AU audio format encoding value 2.
@@ -92,7 +92,7 @@ pub enum SampleFormat {
     /// Signed 64-bit floating point sample format. The AU audio format encoding value 7.
     F64,
     /// Compressed A-Law sample format. Each decoded sample is a signed 16-bit integer.
-    /// Reading and writing should happen as signed 16-bit integers.
+    /// Reading and writing samples should happen as signed 16-bit integers.
     /// The AU audio format encoding value 27.
     CompressedAlaw,
     /// Custom: unsupported encoding. The inner u32 value is the AU audio format encoding value.
