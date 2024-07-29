@@ -25,7 +25,8 @@
 //! The term *description* is used to mean the description / info / annotation data field.
 
 #![allow(
-    clippy::question_mark
+    clippy::question_mark,
+    clippy::byte_char_slices,
 )]
 #![forbid(
     unsafe_code,
