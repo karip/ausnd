@@ -26,7 +26,6 @@
 
 #![allow(
     clippy::question_mark,
-    clippy::byte_char_slices,
 )]
 #![forbid(
     unsafe_code,
