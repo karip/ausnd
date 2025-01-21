@@ -283,7 +283,7 @@ impl<W: Write> AuWriter<W> {
             .and_then(|dl| dl.checked_add(desc_padding_len)) else {
             return Err(AuError::InvalidParameter);
         };
-        write.write_all(&[ b'.', b's', b'n', b'd' ])?;          // magic
+        write.write_all(b".snd")?;                              // magic
         write.write_all(&offset.to_be_bytes())?;                // offset
         write.write_all(&[ 0xff, 0xff, 0xff, 0xff ])?;          // data_size = initially unknown
         write.write_all(&(info.sample_format.as_u32()).to_be_bytes())?; // encoding

@@ -44,7 +44,7 @@ pub struct Samples<'a, R> {
 
 impl<'a, R> Samples<'a, R> {
     /// Creates a new sample iterator.
-    fn new(reader: &'a mut R) -> Samples<R> {
+    fn new(reader: &'a mut R) -> Samples<'a, R> {
         Samples {
             reader
         }
@@ -52,7 +52,7 @@ impl<'a, R> Samples<'a, R> {
 }
 
 /// Iterator implementation for samples.
-impl<'a, R: SampleRead> Iterator for Samples<'a, R> {
+impl<R: SampleRead> Iterator for Samples<'_, R> {
     type Item = AuResult<Sample>;
 
     /// Reads the next sample.
