@@ -60,14 +60,14 @@ cargo run filename.au
 A simple audio processor for volume and noise effects using `AuStreamParser` and `AuWriter`:
 
 ```sh
-cargo run --example ausnd-piper v0.8 n0.1 < input.au > out.au
+cargo run --example ausnd-piper -- -v0.8 -n0.1 < input.au > out.au
 ```
 
 The same audio processor piped from/to ffmpeg. ffmpeg converts mp3 to AU for ausnd-piper,
 which writes AU for ffmpeg to convert it to mp3.
 
 ```sh
-ffmpeg -i music.mp3 -f au - | cargo run --example ausnd-piper v1.5 n0.2 | ffmpeg -i - -y out.mp3
+ffmpeg -i music.mp3 -f au - | cargo run --example ausnd-piper -- -v1.5 -n0.2 | ffmpeg -i - -y out.mp3
 ```
 
 ## Testing

@@ -5,11 +5,11 @@ It reads AU data from stdin, adds volume and noise effects and writes AU data to
 
 Example run, volume level 0.8 and noise level 0.1:
 
-    cargo run --example ausnd-piper v0.8 n0.1 < input.au > output.au
+    cargo run --example ausnd-piper -- -v0.8 -n0.1 < input.au > output.au
 
 To use with ffmpeg:
 
-    ffmpeg -i music.mp3 -f au - | cargo run --example ausnd-piper v1.5 n0.2 | ffmpeg -i - -y out.mp3
+    ffmpeg -i music.mp3 -f au - | cargo run --example ausnd-piper -- -v1.5 -n0.2 | ffmpeg -i - -y out.mp3
 
 */
 use std::env;
@@ -21,10 +21,10 @@ fn main() {
     let mut volume_level = 1.0;
     let mut noise_level = 0.0;
     for arg in env::args() {
-        if arg.starts_with('v') {
-            volume_level = arg[1..].parse().expect("Invalid volume value, should be a float");
-        } else if arg.starts_with('n') {
-            noise_level = arg[1..].parse().expect("Invalid noise value, should be a float");
+        if arg.starts_with("-v") {
+            volume_level = arg[2..].parse().expect("Invalid volume value, should be a float");
+        } else if arg.starts_with("-n") {
+            noise_level = arg[2..].parse().expect("Invalid noise value, should be a float");
         }
     }
 
