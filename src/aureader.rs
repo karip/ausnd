@@ -118,7 +118,7 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
 /// let mut reader = ausnd::AuReader::new(&mut bufrd)?;
 /// let info = reader.read_info()?;
 /// let size = usize::try_from(reader.resolved_sample_byte_len()?).expect("invalid size");
-/// reader.seek_to_start_of_samples()?;
+/// reader.seek_to_first_sample()?;
 /// let mut ireader = reader.into_inner();
 /// let mut raw_sample_data = vec![0u8; size];
 /// ireader.read_exact(&mut raw_sample_data)?;
@@ -248,7 +248,7 @@ impl<R: Read> AuReader<R> {
     ///
     /// This method has been implemented by reading bytes from the underlying reader
     /// and returns an error if it fails.
-    pub fn seek_to_start_of_samples(&mut self) -> AuResult<()> {
+    pub fn seek_to_first_sample(&mut self) -> AuResult<()> {
         if self.state == ReadState::Initialized || self.state == ReadState::ReadingSamples {
             return Err(AuError::InvalidReadState);
         }
@@ -957,14 +957,14 @@ mod tests {
     }
 
     #[test]
-    fn test_seek_to_start_of_samples() -> AuResult<()> {
+    fn test_seek_to_first_sample() -> AuResult<()> {
         // failing call
         let mut au = create_au_hdr(0, 8,
             SampleFormat::Custom(0x402), 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        assert!(reader.seek_to_start_of_samples().is_err());
+        assert!(reader.seek_to_first_sample().is_err());
 
         // failing call after reading a sample
         let mut au = create_au_hdr(0, 8,
@@ -974,7 +974,7 @@ mod tests {
         let mut reader = AuReader::new(cursor)?;
         let _ = reader.read_info()?;
         assert_eq!(reader.read_sample().expect("sample error"), Some(Sample::I8(11)));
-        assert!(reader.seek_to_start_of_samples().is_err());
+        assert!(reader.seek_to_first_sample().is_err());
 
         // failing call after seek
         let mut au = create_au_hdr(0, 8,
@@ -984,7 +984,7 @@ mod tests {
         let mut reader = AuReader::new(cursor)?;
         let _ = reader.read_info()?;
         reader.seek(0)?;
-        assert!(reader.seek_to_start_of_samples().is_err());
+        assert!(reader.seek_to_first_sample().is_err());
 
         // successful call
         let mut au = create_au_hdr_with_desc(3, 8,
@@ -997,7 +997,7 @@ mod tests {
         assert_eq!(info.sample_format, SampleFormat::Custom(0x402));
         assert_eq!(info.sample_len, None);
         assert_eq!(reader.resolved_sample_byte_len().expect("len failed"), 8);
-        assert!(reader.seek_to_start_of_samples().is_ok());
+        assert!(reader.seek_to_first_sample().is_ok());
         let mut cr = reader.into_inner();
         let mut buf = [0u8; 8];
         assert_eq!(cr.read(&mut buf)?, 8);
