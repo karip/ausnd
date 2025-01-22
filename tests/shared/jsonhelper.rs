@@ -7,16 +7,7 @@ pub fn jsonify<T>(reader: &mut ausnd::AuReader<T>) -> ausnd::AuResult<String>
     where T: std::io::Read+std::io::Seek {
 
     let mut json = String::new();
-
-    let info = match reader.read_info() {
-        Err(AuError::StdIoError(e)) => {
-            return Ok(format!("{{ \"error\": {:?} }}", e.to_string()));
-        },
-        Err(error) => {
-            return Ok(format!("{{ \"error\": \"{:?}\" }}", error));
-        },
-        Ok(val) => val
-    };
+    let info = reader.info().clone();
 
     json += &format!("{{\n");
     json += &format!("    \"format\": \"au\",\n");

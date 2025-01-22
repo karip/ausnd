@@ -22,8 +22,7 @@ fn main() {
         .expect("Can't open file"));
     let mut reader = ausnd::AuReader::new(bufreader)
         .expect("Can't read the AU file");
-    let info = reader.read_info()
-        .expect("Can't read audio info from the file");
+    let info = reader.info().clone();
 
     if info.sample_rate == 0 || info.channels == 0 {
         println!("Audio file: {} channels, sample rate {}, format {:?}. Can't play this file.",

@@ -35,7 +35,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("known_samples_iter", |b| b.iter(|| {
         let cursor = Cursor::new(&audata_known);
         let mut reader = AuReader::new(cursor).expect("reader failed");
-        let _ = reader.read_info().expect("read_info failed");
         for s in reader.samples().expect("no iterator") {
             black_box(match s.expect("iter failed") {
                 ausnd::Sample::I8(_) => {},
@@ -51,7 +50,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("unknown_samples_iter", |b| b.iter(|| {
         let cursor = Cursor::new(&audata_unknown);
         let mut reader = AuReader::new(cursor).expect("reader failed");
-        let _ = reader.read_info().expect("read_info failed");
         for s in reader.samples().expect("no iterator") {
             black_box(match s.expect("iter failed") {
                 ausnd::Sample::I8(_) => {},
@@ -67,7 +65,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("known_read_sample", |b| b.iter(|| {
         let cursor = Cursor::new(&audata_known);
         let mut reader = AuReader::new(cursor).expect("reader failed");
-        let _ = reader.read_info().expect("read_info failed");
         while let Some(s) = reader.read_sample().expect("sample error") {
             black_box(match s {
                 ausnd::Sample::I8(_) => {},
@@ -83,7 +80,6 @@ fn criterion_benchmark(c: &mut Criterion) {
     c.bench_function("unknown_read_sample", |b| b.iter(|| {
         let cursor = Cursor::new(&audata_unknown);
         let mut reader = AuReader::new(cursor).expect("reader failed");
-        let _ = reader.read_info().expect("read_info failed");
         while let Some(s) = reader.read_sample().expect("sample error") {
             black_box(match s {
                 ausnd::Sample::I8(_) => {},

@@ -70,7 +70,6 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
 ///
 /// The methods should be called in this order:
 ///  - [`new()`](AuReader::new()) to create the reader
-///  - [`read_info()`](AuReader::read_info()) to read the header
 ///  - optional: [`read_description()`](AuReader::read_description()) to read the description data
 ///  - [`read_sample()`](AuReader::read_sample()) or [`samples()`](AuReader::samples()) to
 ///    read sample data
@@ -95,13 +94,13 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
 ///
 /// # Examples
 ///
-/// Reading samples:
+/// Reading audio info and samples:
 ///
 /// ```no_run
 /// # fn example() -> ausnd::AuResult<()> {
 /// let mut bufrd = std::io::BufReader::new(std::fs::File::open("test.au")?);
 /// let mut reader = ausnd::AuReader::new(&mut bufrd)?;
-/// let info = reader.read_info()?;
+/// let info = reader.info();
 /// for s in reader.samples()? {
 ///     println!("Got sample {:?}", s?);
 /// }
@@ -116,7 +115,7 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
 /// # fn example() -> ausnd::AuResult<()> {
 /// let mut bufrd = std::io::BufReader::new(std::fs::File::open("test.au")?);
 /// let mut reader = ausnd::AuReader::new(&mut bufrd)?;
-/// let info = reader.read_info()?;
+/// let info = reader.info();
 /// let size = usize::try_from(reader.resolved_sample_byte_len()?).expect("invalid size");
 /// reader.seek_to_first_sample()?;
 /// let mut ireader = reader.into_inner();
@@ -131,13 +130,7 @@ pub struct AuReader<R> {
     state: ReadState,
 
     /// Header once it has been read.
-    info: Option<AuReadInfo>,
-
-    /// Initial stream pos in bytes for read_info().
-    initial_stream_pos: u64,
-
-    /// Initial stream length in bytes for read_info().
-    initial_stream_len: Option<u64>,
+    info: AuReadInfo,
 
     /// Number of description bytes to be read.
     desc_bytes_unread_len: u64,
@@ -159,50 +152,31 @@ impl<R: Read> AuReader<R> {
 
     /* TODO: rename to new() and make public when Rust supports some kind of specialization. */
     /// Creates a new AuReader for inner reader implementing `Read`.
+    ///
+    /// Header data is read immediately from the inner reader. After that, the stream position
+    /// is at the start of the description or sample data.
     #[allow(dead_code)]
-    fn new_read(inner: R) -> AuResult<AuReader<R>> {
+    fn new_read(mut inner: R) -> AuResult<AuReader<R>> {
         // TODO: if inner implements Seek, find the end of the stream by seeking to its end
         //let initpos = inner.stream_position()?;
         //let initlen = inner.seek(SeekFrom::End(0))?;
         //inner.seek(SeekFrom::Start(initpos))?;
+        let hdr = read_header(&mut inner, 0, None)?;
         let r = AuReader {
-            state: ReadState::Initialized,
-            info: None,
-            initial_stream_pos: 0,
-            initial_stream_len: None,
-            desc_bytes_unread_len: 0,
-            sample_data_start_pos: 0,
-            sample_data_read_pos: 0,
-            resolved_data_len: None,
+            state: ReadState::InfoProcessed,
+            info: hdr.info,
+            desc_bytes_unread_len: hdr.desc_bytes_unread_len,
+            sample_data_start_pos: hdr.sample_data_start_pos,
+            sample_data_read_pos: hdr.sample_data_start_pos,
+            resolved_data_len: hdr.resolved_data_len,
             handle: inner,
         };
         Ok(r)
     }
 
-    /// Reads [`AuReadInfo`] from the stream. The data is validated and an error is
-    /// returned if the stream contains invalid data.
-    pub fn read_info(&mut self) -> AuResult<AuReadInfo> {
-        if self.info.is_some() {
-            return Err(AuError::InvalidReadState);
-        }
-        let mut header = [0u8; crate::HEADER_SIZE as usize];
-        self.handle.read_exact(&mut header)?;
-
-        let (offset, h) = AuReadInfo::parse_bytes(&header)?;
-        self.sample_data_start_pos = offset;
-        self.sample_data_read_pos = offset;
-        self.info = Some(h.clone());
-        self.state = ReadState::InfoProcessed;
-        // resolve the real data size from header or stream length
-        if let Some(sbl) = h.sample_byte_len {
-            self.resolved_data_len = Some(u64::from(sbl));
-
-        } else if let Some(isl) = self.initial_stream_len {
-            self.resolved_data_len = Some(isl - self.sample_data_start_pos -
-                    self.initial_stream_pos);
-        }
-        self.desc_bytes_unread_len = self.sample_data_start_pos - u64::from(crate::HEADER_SIZE);
-        Ok(h)
+    /// Returns a struct containing stream audio info, such as number of channels and sample rate.
+    pub fn info(&self) -> &AuReadInfo {
+        &self.info
     }
 
     /// Pull some description bytes into the specified buffer, returning how many bytes were read.
@@ -211,8 +185,7 @@ impl<R: Read> AuReader<R> {
     /// the length of the specified buffer, then this method should be called again
     /// until 0 is returned.
     ///
-    /// This method can be called after [`read_info()`](AuReader::read_info()) and before
-    /// samples have been read.
+    /// This method can be called before samples have been read.
     ///
     /// The description bytes may contain binary data or ASCII characters with or
     /// without nul-termination.
@@ -280,10 +253,7 @@ impl<R: Read> AuReader<R> {
             if self.state == ReadState::Initialized {
                 return Err(AuError::InvalidReadState);
             }
-            let Some(info) = &self.info else {
-                return Err(AuError::InvalidReadState);
-            };
-            if let SampleFormat::Custom(_) = info.sample_format {
+            if let SampleFormat::Custom(_) = self.info.sample_format {
                 return Err(AuError::Unsupported);
             }
             match self.skip_description() {
@@ -292,10 +262,7 @@ impl<R: Read> AuReader<R> {
             }
             self.state = ReadState::ReadingSamples;
         }
-        let Some(info) = &self.info else {
-            return Err(AuError::InvalidReadState);
-        };
-        let sf = info.sample_format;
+        let sf = self.info.sample_format;
         let bsize = sf.bytesize_u64();
         // if the header has known size, read until that size and then stop
         if let Some(slen) = self.resolved_data_len {
@@ -465,10 +432,7 @@ impl<R: Read> AuReader<R> {
         if self.state == ReadState::Initialized {
             return Err(AuError::InvalidReadState);
         }
-        let Some(info) = &self.info else {
-            return Err(AuError::InvalidReadState);
-        };
-        if let SampleFormat::Custom(_) = info.sample_format {
+        if let SampleFormat::Custom(_) = self.info.sample_format {
             return Err(AuError::Unsupported);
         }
         self.skip_description()?;
@@ -510,10 +474,7 @@ impl<R: Read> SampleRead for AuReader<R> {
 
     fn size_hint(&self) -> (usize, Option<usize>) {
         // get the lower and upper bound of the sample count
-        let Some(info) = &self.info else {
-            return (0, None);
-        };
-        let sample_size = info.sample_format.bytesize_u64();
+        let sample_size = self.info.sample_format.bytesize_u64();
         let Some(slen) = self.resolved_data_len else { // unknown size
             return (0, None);
         };
@@ -529,47 +490,44 @@ impl<R: Read> SampleRead for AuReader<R> {
 
 impl<R: Read + Seek> AuReader<R> {
     /// Creates a new AuReader for the inner reader implementing `Read + Seek`.
+    ///
+    /// Header data is read immediately from the inner reader. After that, the stream position
+    /// is at the start of the description or sample data.
     pub fn new(mut inner: R) -> AuResult<AuReader<R>> {
         // find the end of the stream by seeking to its end
         let initpos = inner.stream_position()?;
         let initlen = inner.seek(SeekFrom::End(0))?;
         inner.seek(SeekFrom::Start(initpos))?;
+        let hdr = read_header(&mut inner, initpos, Some(initlen))?;
         let r = AuReader {
-            state: ReadState::Initialized,
-            info: None,
-            initial_stream_pos: initpos,
-            initial_stream_len: Some(initlen),
-            desc_bytes_unread_len: 0,
-            sample_data_start_pos: 0,
-            sample_data_read_pos: 0,
-            resolved_data_len: None,
+            state: ReadState::InfoProcessed,
+            info: hdr.info,
+            desc_bytes_unread_len: hdr.desc_bytes_unread_len,
+            sample_data_start_pos: hdr.sample_data_start_pos,
+            sample_data_read_pos: hdr.sample_data_start_pos,
+            resolved_data_len: hdr.resolved_data_len,
             handle: inner,
         };
         Ok(r)
     }
 
     /// Returns the total number of samples in the stream.
-    /// Returns an error for custom sample formats or if [`read_info()`](AuReader::read_info())
-    /// hasn't been called.
+    /// Returns an error for custom sample formats.
     ///
     /// The difference between this method and [`AuReadInfo::sample_len`] is that this
     /// method always returns the length even if the length is unknown in the header.
     pub fn resolved_sample_len(&self) -> AuResult<u64> {
-        let Some(info) = &self.info else {
-            return Err(AuError::InvalidReadState);
-        };
         let Some(slen) = self.resolved_data_len else {
             return Err(AuError::InvalidReadState);
         };
-        if let SampleFormat::Custom(_) = info.sample_format {
+        if let SampleFormat::Custom(_) = self.info.sample_format {
             return Err(AuError::Unsupported);
         }
         // division rounded down so that the possible last broken sample isn't included
-        Ok(slen / info.sample_format.bytesize_u64())
+        Ok(slen / self.info.sample_format.bytesize_u64())
     }
 
     /// Returns the total number of sample bytes in the stream.
-    /// Returns an error if [`read_info()`](AuReader::read_info()) hasn't been called.
     ///
     /// The difference between this method and [`AuReadInfo::sample_byte_len`] is that this
     /// method always returns the length even if the length is unknown in the header.
@@ -583,11 +541,8 @@ impl<R: Read + Seek> AuReader<R> {
     /// Seeks the stream to the given sample position.
     /// Returns an error if trying to seek past the maximum sample position.
     pub fn seek(&mut self, sample_position: u64) -> AuResult<()> {
-        let Some(info) = &self.info else {
-            return Err(AuError::InvalidReadState);
-        };
-        let sample_size = info.sample_format.bytesize_u64();
-        if let SampleFormat::Custom(_) = info.sample_format {
+        let sample_size = self.info.sample_format.bytesize_u64();
+        if let SampleFormat::Custom(_) = self.info.sample_format {
             return Err(AuError::Unsupported);
         }
         if self.state == ReadState::InfoProcessed {
@@ -615,6 +570,39 @@ impl<R: Read + Seek> AuReader<R> {
         Ok(())
     }
 
+}
+
+struct HeaderData {
+    info: AuReadInfo,
+    sample_data_start_pos: u64,
+    resolved_data_len: Option<u64>,
+    desc_bytes_unread_len: u64
+}
+
+/// Reads header data from the stream. The data is validated and an error is
+/// returned if the stream contains invalid data.
+fn read_header(handle: &mut dyn Read, initial_stream_pos: u64, initial_stream_len: Option<u64>)
+    -> AuResult<HeaderData> {
+    let mut header = [0u8; crate::HEADER_SIZE as usize];
+    handle.read_exact(&mut header)?;
+
+    let (sample_data_start_pos, info) = AuReadInfo::parse_bytes(&header)?;
+    // resolve the real data size from header or stream length
+    #[allow(clippy::manual_map)]
+    let resolved_data_len = if let Some(sbl) = info.sample_byte_len {
+        Some(u64::from(sbl))
+    } else if let Some(isl) = initial_stream_len {
+        Some(isl - sample_data_start_pos - initial_stream_pos)
+    } else {
+        None
+    };
+    let desc_bytes_unread_len = sample_data_start_pos - u64::from(crate::HEADER_SIZE);
+    Ok(HeaderData {
+        info,
+        sample_data_start_pos,
+        resolved_data_len,
+        desc_bytes_unread_len
+    })
 }
 
 #[cfg(test)]
@@ -739,8 +727,8 @@ mod tests {
         let mut au = create_au_hdr(0, 8, SampleFormat::I8, 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
-        let mut reader = AuReader::new(cursor)?;
-        let info = reader.read_info()?;
+        let reader = AuReader::new(cursor)?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::I8);
         Ok(())
     }
@@ -750,8 +738,8 @@ mod tests {
         let mut au = create_au_hdr(0, 8, SampleFormat::I8, 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let mut cursor = Cursor::new(&au);
-        let mut reader = AuReader::new(&mut cursor)?;
-        let info = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::I8);
         Ok(())
     }
@@ -761,8 +749,8 @@ mod tests {
         let mut au = create_au_hdr(0, 8, SampleFormat::I8, 44100, 1);
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let mut rd: &[u8] = au.as_ref();
-        let mut reader = AuReader::new_read(&mut rd)?;
-        let info = reader.read_info()?;
+        let reader = AuReader::new_read(&mut rd)?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::I8);
         Ok(())
     }
@@ -773,7 +761,7 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        let info = reader.read_info()?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::I8);
         assert_eq!(reader.samples()?.next().expect("sample read error")?, Sample::I8(11));
         let mut cr = reader.into_inner();
@@ -789,7 +777,7 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        let info = reader.read_info()?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::I8);
         let cr = reader.get_ref();
         assert_eq!(cr.position(), 24);
@@ -803,7 +791,7 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        let info = reader.read_info()?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::I8);
         assert_eq!(reader.samples()?.next().expect("sample read error")?, Sample::I8(11));
         let cr = reader.get_mut();
@@ -821,8 +809,8 @@ mod tests {
             au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
-            let mut reader = AuReader::new(&mut cursor)?;
-            let info = reader.read_info()?;
+            let reader = AuReader::new(&mut cursor)?;
+            let info = reader.info();
             assert_eq!(info.channels, 1);
             assert_eq!(info.sample_format, SampleFormat::I16);
             assert_eq!(info.sample_rate, 44100);
@@ -846,8 +834,8 @@ mod tests {
             au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8 ]);
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
-            let mut reader = AuReader::new(&mut cursor)?;
-            let info = reader.read_info()?;
+            let reader = AuReader::new(&mut cursor)?;
+            let info = reader.info();
             assert_eq!(info.channels, 1);
             assert_eq!(info.sample_format, SampleFormat::Custom(0x402));
             assert_eq!(info.sample_rate, 44100);
@@ -873,13 +861,12 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            assert!(reader.read_description(&mut []).is_err());
-            let info = reader.read_info()?;
+            let info = reader.info();
             assert_eq!(info.description_byte_len, 0);
-            // description can be called many times for an empty buf
+            // description can be called many times with an empty buf
             assert_eq!(reader.read_description(&mut [])?, 0);
             assert_eq!(reader.read_description(&mut [])?, 0);
-            // no bytes are read to the buffer
+            // no bytes are read to the buffer because desc is empty
             let mut desc = [ 99, 99 ];
             assert_eq!(reader.read_description(&mut desc)?, 0);
             assert_eq!(desc, [ 99, 99 ]);
@@ -894,7 +881,7 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let info = reader.read_info()?;
+            let info = reader.info();
             assert_eq!(info.channels, 1);
             assert_eq!(info.sample_format, SampleFormat::I8);
             assert_eq!(info.sample_rate, 44100);
@@ -921,7 +908,6 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let _ = reader.read_info()?;
             assert_eq!(reader.read_description(&mut [])?, 0);
             let mut desc = vec![0u8; 4];
             assert_eq!(reader.read_description(&mut desc)?, 4);
@@ -935,7 +921,6 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let _ = reader.read_info()?;
             let mut desc = vec![0u8; 4];
             assert_eq!(reader.read_description(&mut desc)?, 1);
             assert_eq!(desc, &[ 99, 0, 0, 0 ]);
@@ -948,7 +933,6 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let _ = reader.read_info()?;
             let mut desc = vec![0u8; 8];
             let _ = reader.read_description(&mut desc)?;
             assert_eq!(desc, &[ 65, 66, 67, 68, 69, 70, 71, 0 ]);
@@ -964,7 +948,7 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        assert!(reader.seek_to_first_sample().is_err());
+        assert!(reader.seek_to_first_sample().is_ok());
 
         // failing call after reading a sample
         let mut au = create_au_hdr(0, 8,
@@ -972,7 +956,6 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        let _ = reader.read_info()?;
         assert_eq!(reader.read_sample().expect("sample error"), Some(Sample::I8(11)));
         assert!(reader.seek_to_first_sample().is_err());
 
@@ -982,7 +965,6 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        let _ = reader.read_info()?;
         reader.seek(0)?;
         assert!(reader.seek_to_first_sample().is_err());
 
@@ -993,7 +975,7 @@ mod tests {
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
         let mut reader = AuReader::new(cursor)?;
-        let info = reader.read_info()?;
+        let info = reader.info();
         assert_eq!(info.sample_format, SampleFormat::Custom(0x402));
         assert_eq!(info.sample_len, None);
         assert_eq!(reader.resolved_sample_byte_len().expect("len failed"), 8);
@@ -1016,7 +998,7 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let info = reader.read_info()?;
+            let info = reader.info();
             assert_eq!(info.channels, 1);
             assert_eq!(info.sample_format, SampleFormat::I8);
             assert_eq!(info.sample_rate, 44100);
@@ -1032,7 +1014,7 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let info = reader.read_info()?;
+            let info = reader.info();
             assert_eq!(info.channels, 1);
             assert_eq!(info.sample_format, SampleFormat::I8);
             assert_eq!(info.sample_rate, 44100);
@@ -1056,7 +1038,7 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let info = reader.read_info()?;
+            let info = reader.info();
             assert_eq!(info.sample_format, SampleFormat::I32);
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I32(1)));
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I32(2)));
@@ -1081,7 +1063,6 @@ mod tests {
         let mut init_buf = vec![0u8; 3];
         buffer.read_exact(&mut init_buf)?;
         let mut reader = AuReader::new(&mut buffer)?;
-        let _ = reader.read_info()?;
         assert_eq!(reader.samples()?.next().expect("sample read error")?, Sample::I32(1));
         // data appended won't make it readable
         reader.get_mut().append(&[ 0, 0, 0, 2 ]);
@@ -1096,7 +1077,6 @@ mod tests {
         let mut init_buf = vec![0u8; 3];
         buffer.read_exact(&mut init_buf)?;
         let mut reader = AuReader::new(&mut buffer)?;
-        let _ = reader.read_info()?;
         assert_eq!(reader.samples()?.next().expect("sample read error")?, Sample::I32(1));
         // data appended won't make it readable
         reader.get_mut().append(&[ 0, 2, 0, 0, 0, 3 ]);
@@ -1114,7 +1094,6 @@ mod tests {
         let mut rd: &[u8] = au.as_ref();
         read_dummy_data(&mut rd, 3)?;
         let mut reader = AuReader::new_read(&mut rd)?;
-        let _ = reader.read_info()?;
         assert_eq!(reader.read_sample()?, Some(Sample::F32(0.0)));
         assert_eq!(reader.read_sample()?, None);
 
@@ -1134,7 +1113,6 @@ mod tests {
             let mut rd: &[u8] = au.as_ref();
             read_dummy_data(&mut rd, 3)?;
             let mut reader = AuReader::new_read(&mut rd)?;
-            let _ = reader.read_info()?;
             for _ in 0..test_case.count {
                 assert_eq!(reader.read_sample()?, Some(test_case.sample));
             }
@@ -1149,8 +1127,8 @@ mod tests {
     fn test_read_samples_stream_cleared() -> AuResult<()> {
         // tests cases where the stream is suddenly cleared, creating errors
         let mut buffer = AppendableReader::new();
-        let au = create_au_hdr(3, 0xffffffff,
-            SampleFormat::I32, 44100, 1);
+        let au = create_au_hdr_with_desc(3, 0xffffffff,
+            SampleFormat::I32, 44100, 1, &[ b'd', b's', b'c', 0 ]);
         buffer.append(&au);
         buffer.append(&[ 0, 0, 0, 1, 0, 0, 0, 2 ]);
         let mut init_buf = vec![0u8; 3];
@@ -1158,7 +1136,8 @@ mod tests {
         let mut reader = AuReader::new(&mut buffer)?;
         // stream is cleared
         reader.get_mut().clear();
-        assert!(reader.read_info().is_err());
+        let mut dbuf = vec![ 0, 0, 0 ];
+        assert!(reader.read_description(&mut dbuf).is_err());
 
         let mut buffer = AppendableReader::new();
         let au = create_au_hdr(3, 0xffffffff,
@@ -1168,7 +1147,6 @@ mod tests {
         let mut init_buf = vec![0u8; 3];
         buffer.read_exact(&mut init_buf)?;
         let mut reader = AuReader::new(&mut buffer)?;
-        let _ = reader.read_info()?;
         // stream is cleared
         reader.get_mut().clear();
         assert!(reader.read_sample().is_err());
@@ -1189,7 +1167,6 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let _ = reader.read_info()?;
             // check that size_hint() is decreasing
             {
                 let mut siter = reader.samples()?;
@@ -1235,7 +1212,6 @@ mod tests {
             let mut rd: &[u8] = au.as_ref();
             read_dummy_data(&mut rd, 3)?;
             let mut reader = AuReader::new_read(&mut rd)?;
-            let _ = reader.read_info()?;
             // check that size_hint() is decreasing
             {
                 let mut siter = reader.samples()?;
@@ -1263,8 +1239,7 @@ mod tests {
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
-        let mut reader = AuReader::new(&mut cursor)?;
-        let _ = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
         assert_eq!(reader.resolved_sample_len().expect("invalid len"), 4);
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 8);
 
@@ -1274,8 +1249,7 @@ mod tests {
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
-        let mut reader = AuReader::new(&mut cursor)?;
-        let _ = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
         assert_eq!(reader.resolved_sample_len().expect("invalid len"), 4);
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 9);
 
@@ -1285,8 +1259,7 @@ mod tests {
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0, 8 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
-        let mut reader = AuReader::new(&mut cursor)?;
-        let _ = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
         assert_eq!(reader.resolved_sample_len().expect("invalid len"), 8);
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 16);
 
@@ -1296,8 +1269,7 @@ mod tests {
         au.extend_from_slice(&[ 0, 1, 0, 2, 0, 3, 0, 4, 0, 5, 0, 6, 0, 7, 0 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
-        let mut reader = AuReader::new(&mut cursor)?;
-        let _ = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
         assert_eq!(reader.resolved_sample_len().expect("invalid len"), 7);
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 15);
 
@@ -1312,8 +1284,7 @@ mod tests {
         au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6, 7, 8, 9, 0x80, 0x81, 0x82, 0x83, 0x84, 0x85 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
-        let mut reader = AuReader::new(&mut cursor)?;
-        let _ = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
         assert!(reader.resolved_sample_len().is_err());
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 9);
 
@@ -1323,8 +1294,7 @@ mod tests {
         au.extend_from_slice(&[ 1, 2, 3, 4, 5 ]);
         let mut cursor = Cursor::new(&au);
         read_dummy_data(&mut cursor, 3)?;
-        let mut reader = AuReader::new(&mut cursor)?;
-        let _ = reader.read_info()?;
+        let reader = AuReader::new(&mut cursor)?;
         assert!(reader.resolved_sample_len().is_err());
         assert_eq!(reader.resolved_sample_byte_len().expect("invalid len"), 5);
 
@@ -1345,7 +1315,6 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let _ = reader.read_info()?;
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(2)));
             reader.seek(0)?;
@@ -1374,7 +1343,6 @@ mod tests {
             let mut cursor = Cursor::new(&au);
             read_dummy_data(&mut cursor, 3)?;
             let mut reader = AuReader::new(&mut cursor)?;
-            let _ = reader.read_info()?;
             reader.seek(4)?;
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(5)));
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(6)));

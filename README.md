@@ -29,7 +29,7 @@ Reading an AU audio file:
 ```rust, no_run
 let mut bufrd = std::io::BufReader::new(std::fs::File::open("test.au").expect("File error"));
 let mut reader = ausnd::AuReader::new(&mut bufrd).expect("Read error");
-let info = reader.read_info().expect("Invalid header");
+let info = reader.info().clone();
 for sample in reader.samples().expect("Can't read samples") {
     println!("Got sample {:?}", sample.expect("Sample error"));
 }
