@@ -21,7 +21,7 @@ pub enum Sample {
 /// The SampleRead trait allows for reading samples from a source.
 trait SampleRead {
     /// Reads the next sample.
-    fn read_sample_for_iter(&mut self) -> Option<AuResult<Sample>>;
+    fn read_sample_for_iter(&mut self) -> AuResult<Option<Sample>>;
     /// Returns a tuple where the first and second elements are the remaining sample count.
     /// For unknown sized audio data, returns (0, None).
     fn size_hint(&self) -> (usize, Option<usize>);
@@ -30,17 +30,24 @@ trait SampleRead {
 /// Iterator to read samples one by one.
 ///
 /// Note: calling `next()` for `Samples` may return an error, which should be checked.
-/// Otherwise, the iterator may return an infinite number of errors and loop forever.
+///
+/// The iterator is automatically finished after the first error even if there should be more
+/// samples. It prevents returning an infinite number of errors for streams
+/// with an unknown length.
 #[derive(Debug)]
 pub struct Samples<'a, R> {
-    reader: &'a mut R
+    reader: &'a mut R,
+    // flag to remember that the previous next() had an error: this is used to return None
+    // after an error so that streams with unknown lengths can't return infinite number of errors
+    has_returned_error: bool
 }
 
 impl<'a, R> Samples<'a, R> {
     /// Creates a new sample iterator.
     fn new(reader: &'a mut R) -> Samples<'a, R> {
         Samples {
-            reader
+            reader,
+            has_returned_error: false
         }
     }
 }
@@ -52,7 +59,17 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
     /// Reads the next sample.
     #[inline(always)]
     fn next(&mut self) -> Option<Self::Item> {
-        self.reader.read_sample_for_iter()
+        if self.has_returned_error {
+            return None;
+        }
+        match self.reader.read_sample_for_iter() {
+            Ok(Some(s)) => Some(Ok(s)),
+            Ok(None) => None,
+            Err(e) => {
+                self.has_returned_error = true;
+                Some(Err(e))
+            },
+        }
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -395,20 +412,6 @@ impl<R: Read> AuReader<R> {
 
     /// Returns an iterator for samples. Returns an error for unsupported encodings
     /// (`SampleFormat::Custom`).
-    ///
-    /// Note: calling `next()` for [`Samples`] may return an error, which should be checked.
-    /// Otherwise, the iterator may return an infinite number of errors and loop forever:
-    ///
-    /// ```no_run
-    /// # use std::io::Read;
-    /// # fn example() -> ausnd::AuResult<()> {
-    /// # let mut bufrd = std::io::BufReader::new(std::fs::File::open("test.au")?);
-    /// # let mut reader = ausnd::AuReader::new(&mut bufrd)?;
-    /// reader.samples()?.count(); // don't do this, loops forever if an error is encountered
-    /// reader.samples()?.map(|s| s.expect("error")).count(); // better, panics for errors
-    /// # Ok(())
-    /// # }
-    /// ```
     pub fn samples(&mut self) -> AuResult<Samples<'_, AuReader<R>>> {
         self.skip_description()?;
         if let SampleFormat::Custom(_) = self.info.sample_format {
@@ -440,12 +443,8 @@ impl<R: Read> AuReader<R> {
 
 impl<R: Read> SampleRead for AuReader<R> {
     #[inline(always)]
-    fn read_sample_for_iter(&mut self) -> Option<AuResult<Sample>> {
-        match self.read_sample() {
-            Ok(Some(s)) => Some(Ok(s)),
-            Ok(None) => None,
-            Err(e) => Some(Err(e)),
-        }
+    fn read_sample_for_iter(&mut self) -> AuResult<Option<Sample>> {
+        self.read_sample()
     }
 
     fn size_hint(&self) -> (usize, Option<usize>) {
@@ -1204,6 +1203,24 @@ mod tests {
                 }
             }
         }
+        Ok(())
+    }
+
+    #[test]
+    fn test_samples_iterator_errors() -> AuResult<()> {
+        let mut au = create_au_hdr_with_desc(3, 0xffffffff,
+            SampleFormat::I32, 44100, 1, &[ 0, 0, 0, 0 ]);
+        // the last sample isn't complete: only 2 bytes given out of 4
+        au.extend_from_slice(&[ 1, 2, 3, 4, 5, 6 ]);
+        let mut rd: &[u8] = au.as_ref();
+        read_dummy_data(&mut rd, 3)?;
+        let mut reader = AuReader::new_read(&mut rd)?;
+        let mut siter = reader.samples()?;
+        assert_eq!(siter.size_hint(), (0, None));
+        assert_eq!(siter.next().expect("iterator ended early")?, Sample::I32(0x01020304));
+        assert!(siter.next().expect("iterator ended early").is_err());
+        // the iterator is ended after the first error
+        assert!(siter.next().is_none());
         Ok(())
     }
 
