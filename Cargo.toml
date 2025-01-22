@@ -1,6 +1,6 @@
 [package]
 name = "ausnd"
-version = "0.6.0"
+version = "0.6.1"
 description = "Reader and writer for the AU audio format"
 repository = "https://github.com/karip/ausnd"
 license = "MIT OR Apache-2.0"
