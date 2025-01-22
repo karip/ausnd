@@ -9,7 +9,7 @@
 //! μ-law or A-law compressed sample data.
 //!
 //! The AU header contains the length of the sample data. The header can also
-//! indicate that the length is unknown and that audio data should be read
+//! indicate that the length is unknown, which means that audio data should be read
 //! until the end of the stream. This enables file lengths over 4 gigabytes and streams with
 //! an infinite length.
 //!
@@ -178,10 +178,10 @@ const HEADER_SIZE: u8 = 24;
 #[derive(Debug, Clone, PartialEq)]
 pub struct AuReadInfo {
 
-    /// Number of channels.
+    /// Number of channels. Note: this may be zero.
     pub channels: u32,
 
-    /// Sample rate, samples per second, e.g., 44100 or 48000.
+    /// Sample rate, samples per second, e.g., 44100 or 48000. Note: this may be zero.
     pub sample_rate: u32,
 
     /// Sample format.
@@ -190,12 +190,13 @@ pub struct AuReadInfo {
     /// Length of the description in bytes.
     pub description_byte_len: u32,
 
-    /// Sample count. The value is `None` for unsupported encodings or
-    /// if the header indicated that the stream has an unknown length.
+    /// Sample count. This is based on the value read from the header.
+    /// The value is `None` for unsupported encodings or if the header indicated that
+    /// the stream has an unknown length.
     pub sample_len: Option<u64>,
 
-    /// Length of the sample data in bytes.
-    /// The value is `None` if the header indicates that the stream has an unknown length.
+    /// Length of the sample data in bytes. This is a value read from the header.
+    /// The value is `None` if the header indicated that the stream has an unknown length.
     pub sample_byte_len: Option<u32>
 }
 

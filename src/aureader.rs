@@ -28,6 +28,9 @@ trait SampleRead {
 }
 
 /// Iterator to read samples one by one.
+///
+/// Note: calling `next()` for `Samples` may return an error, which should be checked.
+/// Otherwise, the iterator may return an infinite number of errors and loop forever.
 #[derive(Debug)]
 pub struct Samples<'a, R> {
     reader: &'a mut R
@@ -61,6 +64,7 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
 ///
 /// The methods should be called in this order:
 ///  - [`new()`](AuReader::new()) to create the reader
+///  - optional: [`info()`](AuReader::info()) to get audio info, such as number of channels
 ///  - optional: [`read_description()`](AuReader::read_description()) to read the description data
 ///  - [`read_sample()`](AuReader::read_sample()) or [`samples()`](AuReader::samples()) to
 ///    read sample data
@@ -161,7 +165,7 @@ impl<R: Read> AuReader<R> {
         Ok(r)
     }
 
-    /// Returns a struct containing stream audio info, such as number of channels and sample rate.
+    /// Returns a struct containing audio info, such as number of channels and sample rate.
     pub fn info(&self) -> &AuReadInfo {
         &self.info
     }
@@ -172,8 +176,8 @@ impl<R: Read> AuReader<R> {
     /// the length of the specified buffer, then this method should be called again
     /// until 0 is returned.
     ///
-    /// This method can be called before samples have been read. If the description or some samples
-    /// have already been read, then this method returns 0 and doesn't read any data.
+    /// This method should be called before samples have been read. If the description or
+    /// some samples have already been read, then this method returns 0 and doesn't read any data.
     ///
     /// The description bytes may contain binary data or ASCII characters with or
     /// without nul-termination.
@@ -395,9 +399,15 @@ impl<R: Read> AuReader<R> {
     /// Note: calling `next()` for [`Samples`] may return an error, which should be checked.
     /// Otherwise, the iterator may return an infinite number of errors and loop forever:
     ///
-    /// ```ignore
-    /// reader.samples().count() // don't do this, loops forever if an error is encountered
-    /// reader.samples().map(|s| s.expect("error")).count() // better, panics for errors
+    /// ```no_run
+    /// # use std::io::Read;
+    /// # fn example() -> ausnd::AuResult<()> {
+    /// # let mut bufrd = std::io::BufReader::new(std::fs::File::open("test.au")?);
+    /// # let mut reader = ausnd::AuReader::new(&mut bufrd)?;
+    /// reader.samples()?.count(); // don't do this, loops forever if an error is encountered
+    /// reader.samples()?.map(|s| s.expect("error")).count(); // better, panics for errors
+    /// # Ok(())
+    /// # }
     /// ```
     pub fn samples(&mut self) -> AuResult<Samples<'_, AuReader<R>>> {
         self.skip_description()?;
