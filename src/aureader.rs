@@ -1,15 +1,6 @@
 
 use crate::{cast, AuError, AuReadInfo, AuResult, Read, SampleFormat, Seek, SeekFrom};
 
-/// Reader state.
-#[derive(Debug, Clone, Copy, PartialEq)]
-enum ReadState {
-    Initialized,
-    InfoProcessed,
-    DescriptionProcessed,
-    ReadingSamples,
-}
-
 /// Sample data.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum Sample {
@@ -126,10 +117,7 @@ impl<R: SampleRead> Iterator for Samples<'_, R> {
 /// ```
 #[derive(Debug)]
 pub struct AuReader<R> {
-    /// Read state.
-    state: ReadState,
-
-    /// Header once it has been read.
+    /// Header info.
     info: AuReadInfo,
 
     /// Number of description bytes to be read.
@@ -163,7 +151,6 @@ impl<R: Read> AuReader<R> {
         //inner.seek(SeekFrom::Start(initpos))?;
         let hdr = read_header(&mut inner, 0, None)?;
         let r = AuReader {
-            state: ReadState::InfoProcessed,
             info: hdr.info,
             desc_bytes_unread_len: hdr.desc_bytes_unread_len,
             sample_data_start_pos: hdr.sample_data_start_pos,
@@ -185,7 +172,8 @@ impl<R: Read> AuReader<R> {
     /// the length of the specified buffer, then this method should be called again
     /// until 0 is returned.
     ///
-    /// This method can be called before samples have been read.
+    /// This method can be called before samples have been read. If the description or some samples
+    /// have already been read, then this method returns 0 and doesn't read any data.
     ///
     /// The description bytes may contain binary data or ASCII characters with or
     /// without nul-termination.
@@ -193,10 +181,7 @@ impl<R: Read> AuReader<R> {
     /// This method is implemented by reading bytes from the underlying reader and returns
     /// an error if that reading fails.
     pub fn read_description(&mut self, out_buf: &mut [u8]) -> AuResult<usize> {
-        // if description or samples have already been read, don't read description
-        if self.state != ReadState::InfoProcessed && self.state != ReadState::DescriptionProcessed {
-            return Err(AuError::InvalidReadState);
-        }
+        // if description or samples have already been read, description can't be read anymore
         if out_buf.is_empty() || self.desc_bytes_unread_len == 0 {
             return Ok(0);
         }
@@ -209,28 +194,25 @@ impl<R: Read> AuReader<R> {
         };
         let rs = self.handle.read(read_buf)?;
         self.desc_bytes_unread_len -= u64::try_from(rs).unwrap_or(self.desc_bytes_unread_len);
-        if self.desc_bytes_unread_len == 0 {
-            self.state = ReadState::DescriptionProcessed;
-        }
         Ok(rs)
     }
 
     /// Seeks the stream to the start of the sample data. This method can only seek forward.
     /// Therefore, it returns an error if samples have already been read or
-    /// [`seek()`](AuReader::seek()) has been called.
+    /// [`seek()`](AuReader::seek()) has been called to move past the first sample.
     ///
     /// This method has been implemented by reading bytes from the underlying reader
     /// and returns an error if it fails.
     pub fn seek_to_first_sample(&mut self) -> AuResult<()> {
-        if self.state == ReadState::Initialized || self.state == ReadState::ReadingSamples {
-            return Err(AuError::InvalidReadState);
+        if self.sample_data_read_pos != self.sample_data_start_pos {
+            return Err(AuError::SeekError);
         }
         self.skip_description()
     }
 
     /// Skips description bytes in the stream.
     fn skip_description(&mut self) -> AuResult<()> {
-        if self.state != ReadState::InfoProcessed {
+        if self.desc_bytes_unread_len == 0 {
             return Ok(());
         }
         let mut skip_buf = [0u8; 1];
@@ -238,7 +220,6 @@ impl<R: Read> AuReader<R> {
             self.handle.read_exact(&mut skip_buf)?;
         }
         self.desc_bytes_unread_len = 0;
-        self.state = ReadState::DescriptionProcessed;
         Ok(())
     }
 
@@ -249,18 +230,8 @@ impl<R: Read> AuReader<R> {
     /// the underlying reader fails.
     #[inline(always)]
     pub fn read_sample(&mut self) -> AuResult<Option<Sample>> {
-        if self.state != ReadState::ReadingSamples {
-            if self.state == ReadState::Initialized {
-                return Err(AuError::InvalidReadState);
-            }
-            if let SampleFormat::Custom(_) = self.info.sample_format {
-                return Err(AuError::Unsupported);
-            }
-            match self.skip_description() {
-                Ok(()) => {},
-                Err(e) => { return Err(e); }
-            }
-            self.state = ReadState::ReadingSamples;
+        if self.desc_bytes_unread_len != 0 {
+            self.skip_description()?;
         }
         let sf = self.info.sample_format;
         let bsize = sf.bytesize_u64();
@@ -429,15 +400,10 @@ impl<R: Read> AuReader<R> {
     /// reader.samples().map(|s| s.expect("error")).count() // better, panics for errors
     /// ```
     pub fn samples(&mut self) -> AuResult<Samples<'_, AuReader<R>>> {
-        if self.state == ReadState::Initialized {
-            return Err(AuError::InvalidReadState);
-        }
+        self.skip_description()?;
         if let SampleFormat::Custom(_) = self.info.sample_format {
             return Err(AuError::Unsupported);
         }
-        self.skip_description()?;
-        self.state = ReadState::ReadingSamples;
-
         Ok(Samples::new(self))
     }
 
@@ -500,7 +466,6 @@ impl<R: Read + Seek> AuReader<R> {
         inner.seek(SeekFrom::Start(initpos))?;
         let hdr = read_header(&mut inner, initpos, Some(initlen))?;
         let r = AuReader {
-            state: ReadState::InfoProcessed,
             info: hdr.info,
             desc_bytes_unread_len: hdr.desc_bytes_unread_len,
             sample_data_start_pos: hdr.sample_data_start_pos,
@@ -545,9 +510,6 @@ impl<R: Read + Seek> AuReader<R> {
         if let SampleFormat::Custom(_) = self.info.sample_format {
             return Err(AuError::Unsupported);
         }
-        if self.state == ReadState::InfoProcessed {
-            self.skip_description()?;
-        }
         let total_samples = match self.resolved_sample_len() {
             Ok(sl) => sl,
             Err(_) => { return Err(AuError::SeekError); }
@@ -564,9 +526,10 @@ impl<R: Read + Seek> AuReader<R> {
             .and_then(|p| p.checked_sub_unsigned(self.sample_data_read_pos)) else {
             return Err(AuError::SeekError);
         };
+        self.skip_description()?;
         self.handle.seek(SeekFrom::Current(seek_offset))?;
         self.sample_data_read_pos = new_pos;
-        self.state = ReadState::ReadingSamples;
+        self.desc_bytes_unread_len = 0;
         Ok(())
     }
 
@@ -871,8 +834,8 @@ mod tests {
             assert_eq!(reader.read_description(&mut desc)?, 0);
             assert_eq!(desc, [ 99, 99 ]);
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
-            // description can't be read after samples have been read
-            assert!(reader.read_description(&mut []).is_err());
+            // read_description() can be called after samples have been read
+            assert_eq!(reader.read_description(&mut [])?, 0);
 
             // desc "WORLD"
             let mut au = create_au_hdr_with_desc(3, data_size,
@@ -896,10 +859,10 @@ mod tests {
             assert_eq!(reader.read_description(&mut desc)?, 0);
             assert_eq!(reader.read_description(&mut [])?, 0);
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
-            // description can't be read to an empty buf after samples have been read
-            assert!(reader.read_description(&mut []).is_err());
-            // description can't be read after samples have been read
-            assert!(reader.read_description(&mut desc).is_err());
+            // description returns 0 after samples have been read
+            assert_eq!(reader.read_description(&mut [])?, 0);
+            // description returns 0 after samples have been read
+            assert_eq!(reader.read_description(&mut desc)?, 0);
 
             // desc four zeros
             let mut au = create_au_hdr_with_desc(3, data_size,
@@ -965,8 +928,10 @@ mod tests {
         au.extend_from_slice(&[ 11, 12, 13, 14, 15, 16, 17, 18 ]);
         let cursor = Cursor::new(&au);
         let mut reader = AuReader::new(cursor)?;
-        reader.seek(0)?;
+        reader.seek(1)?;
         assert!(reader.seek_to_first_sample().is_err());
+        reader.seek(0)?;
+        assert!(reader.seek_to_first_sample().is_ok());
 
         // successful call
         let mut au = create_au_hdr_with_desc(3, 8,
@@ -1003,8 +968,9 @@ mod tests {
             assert_eq!(info.sample_format, SampleFormat::I8);
             assert_eq!(info.sample_rate, 44100);
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
+            // read_description() can be called after samples have been read, but nothing is read
             let mut desc = vec![0u8; 10];
-            assert!(reader.read_description(&mut desc).is_err());
+            assert_eq!(reader.read_description(&mut desc)?, 0);
 
             // partially read description is skipped when reading samples
             let mut au = create_au_hdr_with_desc(3, data_size,
@@ -1023,7 +989,7 @@ mod tests {
             assert_eq!(desc, &[ b'H', b'E', b'L' ]);
             assert_eq!(reader.read_sample().expect("sample read error"), Some(Sample::I8(1)));
             let mut desc = vec![0u8; 10];
-            assert!(reader.read_description(&mut desc).is_err());
+            assert_eq!(reader.read_description(&mut desc)?, 0);
         }
         Ok(())
     }
