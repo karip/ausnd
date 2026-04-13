@@ -43,11 +43,11 @@ enum StreamState {
 /// ```no_run
 /// # use std::io::Write;
 /// # fn example() -> ausnd::AuResult<()> {
-/// let mut streamer = ausnd::AuStreamParser::new(|event| {
+/// let mut stream_parser = ausnd::AuStreamParser::new(|event| {
 ///     println!("Got event: {:?}", event);
 /// });
 /// let byte_data = &[ 0x2e, 0x73, 0x6e, 0x64, 0x00 ];
-/// streamer.write(byte_data)?;
+/// stream_parser.write(byte_data)?;
 /// // ..more write calls to parse more data..
 /// # Ok(())
 /// # }

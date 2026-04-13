@@ -15,10 +15,10 @@
 //!
 //! Provided functionality:
 //!
-//!  - [`AuReader`] reads the AU audio format, typically from a file.
-//!  - [`AuWriter`] writes the AU audio format, typically to a file or a stream.
-//!  - [`AuStreamParser`] parses the AU audio format and sends events to a callback.
-//!    Useful for reading infinite AU streams.
+//!  - [`AuReader`] reads header and sample data, typically from a file.
+//!  - [`AuWriter`] writes header and sample data, typically to a file or a stream.
+//!  - [`AuStreamParser`] parses header and sample data from a stream and sends them as
+//!    events to a callback. Useful for reading infinite AU streams.
 //!
 //! Terminology:
 //! The term *info* is used to mean header data (made of channel count, sample rate, ...).
